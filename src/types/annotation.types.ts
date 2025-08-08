@@ -1,0 +1,304 @@
+// Annotation types and validation functions
+
+// Base annotation interface
+export interface BaseAnnotation {
+  id: string;
+  userId: string;
+  documentId: string;
+  pageNumber: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Coordinate types
+export interface AreaCoordinates {
+  x: number;
+  y: number;
+}
+
+export interface RectangleCoordinates extends AreaCoordinates {
+  width: number;
+  height: number;
+}
+
+// Text selection utility type
+export interface TextSelection {
+  text: string;
+  pageNumber: number;
+  startOffset: number;
+  endOffset: number;
+  coordinates: RectangleCoordinates;
+}
+
+// Highlight model
+export interface Highlight extends BaseAnnotation {
+  startOffset: number;
+  endOffset: number;
+  selectedText: string;
+  color: string;
+  coordinates: RectangleCoordinates;
+}
+
+// Bookmark model
+export interface Bookmark extends BaseAnnotation {
+  title: string;
+  description?: string;
+}
+
+// Comment model
+export interface Comment extends BaseAnnotation {
+  content: string;
+  coordinates: AreaCoordinates;
+}
+
+// Call-to-Action model
+export interface CallToAction extends BaseAnnotation {
+  url: string;
+  label: string;
+  coordinates: RectangleCoordinates;
+}
+
+// User annotations collection type
+export interface UserAnnotations {
+  highlights: Highlight[];
+  bookmarks: Bookmark[];
+  comments: Comment[];
+  callToActions: CallToAction[];
+}
+
+// Validation functions
+export const validateAreaCoordinates = (coords: any): coords is AreaCoordinates => {
+  return (
+    typeof coords === 'object' &&
+    coords !== null &&
+    typeof coords.x === 'number' &&
+    typeof coords.y === 'number' &&
+    coords.x >= 0 &&
+    coords.y >= 0
+  );
+};
+
+export const validateRectangleCoordinates = (coords: any): coords is RectangleCoordinates => {
+  return (
+    validateAreaCoordinates(coords) &&
+    typeof coords.width === 'number' &&
+    typeof coords.height === 'number' &&
+    coords.width > 0 &&
+    coords.height > 0
+  );
+};
+
+export const validateBaseAnnotation = (annotation: any): annotation is BaseAnnotation => {
+  return (
+    typeof annotation === 'object' &&
+    annotation !== null &&
+    typeof annotation.id === 'string' &&
+    annotation.id.trim().length > 0 &&
+    typeof annotation.userId === 'string' &&
+    annotation.userId.trim().length > 0 &&
+    typeof annotation.documentId === 'string' &&
+    annotation.documentId.trim().length > 0 &&
+    typeof annotation.pageNumber === 'number' &&
+    annotation.pageNumber > 0 &&
+    Number.isInteger(annotation.pageNumber) &&
+    annotation.createdAt instanceof Date &&
+    !isNaN(annotation.createdAt.getTime()) &&
+    annotation.updatedAt instanceof Date &&
+    !isNaN(annotation.updatedAt.getTime())
+  );
+};
+
+export const validateTextSelection = (selection: any): selection is TextSelection => {
+  return (
+    typeof selection === 'object' &&
+    selection !== null &&
+    typeof selection.text === 'string' &&
+    selection.text.trim().length > 0 &&
+    typeof selection.pageNumber === 'number' &&
+    selection.pageNumber > 0 &&
+    Number.isInteger(selection.pageNumber) &&
+    typeof selection.startOffset === 'number' &&
+    selection.startOffset >= 0 &&
+    typeof selection.endOffset === 'number' &&
+    selection.endOffset > selection.startOffset &&
+    validateRectangleCoordinates(selection.coordinates)
+  );
+};
+
+export const validateHighlight = (highlight: any): highlight is Highlight => {
+  return (
+    validateBaseAnnotation(highlight) &&
+    typeof highlight.startOffset === 'number' &&
+    highlight.startOffset >= 0 &&
+    typeof highlight.endOffset === 'number' &&
+    highlight.endOffset > highlight.startOffset &&
+    typeof highlight.selectedText === 'string' &&
+    highlight.selectedText.trim().length > 0 &&
+    typeof highlight.color === 'string' &&
+    /^#[0-9A-Fa-f]{6}$/.test(highlight.color) &&
+    validateRectangleCoordinates(highlight.coordinates)
+  );
+};
+
+export const validateBookmark = (bookmark: any): bookmark is Bookmark => {
+  return (
+    validateBaseAnnotation(bookmark) &&
+    typeof bookmark.title === 'string' &&
+    bookmark.title.trim().length > 0 &&
+    (bookmark.description === undefined || 
+     (typeof bookmark.description === 'string' && bookmark.description.trim().length > 0))
+  );
+};
+
+export const validateComment = (comment: any): comment is Comment => {
+  return (
+    validateBaseAnnotation(comment) &&
+    typeof comment.content === 'string' &&
+    comment.content.trim().length > 0 &&
+    validateAreaCoordinates(comment.coordinates)
+  );
+};
+
+export const validateCallToAction = (cta: any): cta is CallToAction => {
+  const urlPattern = /^https?:\/\/.+/;
+  return (
+    validateBaseAnnotation(cta) &&
+    typeof cta.url === 'string' &&
+    urlPattern.test(cta.url) &&
+    typeof cta.label === 'string' &&
+    cta.label.trim().length > 0 &&
+    validateRectangleCoordinates(cta.coordinates)
+  );
+};
+
+export const validateUserAnnotations = (annotations: any): annotations is UserAnnotations => {
+  return (
+    typeof annotations === 'object' &&
+    annotations !== null &&
+    Array.isArray(annotations.highlights) &&
+    annotations.highlights.every(validateHighlight) &&
+    Array.isArray(annotations.bookmarks) &&
+    annotations.bookmarks.every(validateBookmark) &&
+    Array.isArray(annotations.comments) &&
+    annotations.comments.every(validateComment) &&
+    Array.isArray(annotations.callToActions) &&
+    annotations.callToActions.every(validateCallToAction)
+  );
+};
+
+// Creation helpers
+export const createHighlight = (
+  id: string,
+  userId: string,
+  documentId: string,
+  pageNumber: number,
+  startOffset: number,
+  endOffset: number,
+  selectedText: string,
+  color: string,
+  coordinates: RectangleCoordinates
+): Highlight => {
+  const now = new Date();
+  const highlight = {
+    id: id.trim(),
+    userId: userId.trim(),
+    documentId: documentId.trim(),
+    pageNumber,
+    startOffset,
+    endOffset,
+    selectedText: selectedText.trim(),
+    color,
+    coordinates,
+    createdAt: now,
+    updatedAt: now
+  };
+  
+  if (!validateHighlight(highlight)) {
+    throw new Error('Invalid highlight data provided');
+  }
+  
+  return highlight;
+};
+
+export const createBookmark = (
+  id: string,
+  userId: string,
+  documentId: string,
+  pageNumber: number,
+  title: string,
+  description?: string
+): Bookmark => {
+  const now = new Date();
+  const bookmark = {
+    id: id.trim(),
+    userId: userId.trim(),
+    documentId: documentId.trim(),
+    pageNumber,
+    title: title.trim(),
+    description: description?.trim(),
+    createdAt: now,
+    updatedAt: now
+  };
+  
+  if (!validateBookmark(bookmark)) {
+    throw new Error('Invalid bookmark data provided');
+  }
+  
+  return bookmark;
+};
+
+export const createComment = (
+  id: string,
+  userId: string,
+  documentId: string,
+  pageNumber: number,
+  content: string,
+  coordinates: AreaCoordinates
+): Comment => {
+  const now = new Date();
+  const comment = {
+    id: id.trim(),
+    userId: userId.trim(),
+    documentId: documentId.trim(),
+    pageNumber,
+    content: content.trim(),
+    coordinates,
+    createdAt: now,
+    updatedAt: now
+  };
+  
+  if (!validateComment(comment)) {
+    throw new Error('Invalid comment data provided');
+  }
+  
+  return comment;
+};
+
+export const createCallToAction = (
+  id: string,
+  userId: string,
+  documentId: string,
+  pageNumber: number,
+  url: string,
+  label: string,
+  coordinates: RectangleCoordinates
+): CallToAction => {
+  const now = new Date();
+  const cta = {
+    id: id.trim(),
+    userId: userId.trim(),
+    documentId: documentId.trim(),
+    pageNumber,
+    url: url.trim(),
+    label: label.trim(),
+    coordinates,
+    createdAt: now,
+    updatedAt: now
+  };
+  
+  if (!validateCallToAction(cta)) {
+    throw new Error('Invalid call-to-action data provided');
+  }
+  
+  return cta;
+};
