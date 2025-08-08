@@ -6,7 +6,7 @@ import styled from 'styled-components';
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 import { ZoomMode } from './ZoomControls';
-import { TextSelection, Highlight, Comment, AreaCoordinates } from '../../types/annotation.types';
+import { TextSelection, Highlight, Comment, AreaCoordinates, RectangleCoordinates } from '../../types/annotation.types';
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { useResponsive } from '../../hooks/useResponsive';
 import { usePDFErrors } from '../../hooks/useErrorHandler';
@@ -15,6 +15,7 @@ import { HighlightOverlay } from '../annotations/HighlightOverlay';
 import { HighlightCreator } from '../annotations/HighlightCreator';
 import { CommentCreator } from '../annotations/CommentCreator';
 import { CommentOverlay } from '../annotations/CommentOverlay';
+import { CTACreator } from '../annotations/CTACreator';
 import { PDFLoadingSpinner, PageLoadingSpinner } from '../common/LoadingSpinner';
 
 interface PdfDisplayProps {
@@ -38,6 +39,7 @@ interface PdfDisplayProps {
   onCommentEdit?: (commentId: string, newContent: string) => void;
   onCommentDelete?: (commentId: string) => void;
   onCommentHover?: (comment: Comment | null) => void;
+  onCTACreate?: (url: string, label: string, coordinates: RectangleCoordinates, pageNumber: number) => void;
   onScaleChange?: (scale: number) => void;
   onPageChange?: (page: number) => void;
 }
@@ -155,7 +157,7 @@ const PageContainer = styled.div.withConfig({
   -ms-user-select: text;
   
   /* Touch-friendly interactions - allow manipulation but preserve text selection */
-  touch-action: manipulation;
+  touch-action: pan-x pan-y pinch-zoom;
   
   /* Improve text selection appearance */
   ::selection {
@@ -170,15 +172,26 @@ const PageContainer = styled.div.withConfig({
   @media (max-width: ${theme.breakpoints.tablet}) {
     /* Make text selection more prominent on mobile */
     ::selection {
-      background-color: rgba(0, 123, 255, 0.5);
+      background-color: rgba(0, 123, 255, 0.6);
     }
     
     ::-moz-selection {
-      background-color: rgba(0, 123, 255, 0.5);
+      background-color: rgba(0, 123, 255, 0.6);
     }
     
-    /* Improve touch target size */
+    /* Improve touch target size and text selection */
     font-size: 16px; /* Prevent zoom on iOS */
+    
+    /* Better text selection on mobile */
+    -webkit-touch-callout: default;
+    -webkit-user-select: text;
+    -khtml-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    user-select: text;
+    
+    /* Ensure text is selectable on mobile Safari */
+    -webkit-tap-highlight-color: transparent;
   }
 
   @media (max-width: ${theme.breakpoints.tablet}) {
@@ -211,6 +224,7 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
   onCommentEdit,
   onCommentDelete,
   onCommentHover,
+  onCTACreate,
   onScaleChange,
   onPageChange
 }) => {
@@ -223,6 +237,8 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
   const [pendingSelection, setPendingSelection] = useState<TextSelection | null>(null);
   const [showCommentCreator, setShowCommentCreator] = useState(false);
   const [pendingCommentCoordinates, setPendingCommentCoordinates] = useState<AreaCoordinates | null>(null);
+  const [showCTACreator, setShowCTACreator] = useState(false);
+  const [pendingCTACoordinates, setPendingCTACoordinates] = useState<RectangleCoordinates | null>(null);
   
   // Touch gesture state
   const [touchStartDistance, setTouchStartDistance] = useState<number | null>(null);
@@ -304,12 +320,36 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
 
   const effectiveScale = calculateScale();
 
-  // Handle text selection for highlighting
+  // Handle text selection for highlighting and CTA creation
   const handleTextSelected = useCallback((selection: TextSelection) => {
+    console.log('🖍️ Text selected for highlighting/CTA:', {
+      text: selection.text,
+      pageNumber: selection.pageNumber,
+      coordinates: selection.coordinates,
+      isMobile: responsive.isMobile
+    });
     setPendingSelection(selection);
-    setShowHighlightCreator(true);
+    
+    // Check if Ctrl/Cmd key is held for CTA creation from text selection
+    const isCtrlOrCmd = window.event && (window.event.ctrlKey || window.event.metaKey);
+    if (isCtrlOrCmd) {
+      console.log('🔗 Creating CTA from text selection (Ctrl/Cmd+Select)');
+      // Convert text selection coordinates to rectangle coordinates for CTA
+      const rectCoordinates: RectangleCoordinates = {
+        x: selection.coordinates.x,
+        y: selection.coordinates.y,
+        width: selection.coordinates.width,
+        height: selection.coordinates.height
+      };
+      setPendingCTACoordinates(rectCoordinates);
+      setShowCTACreator(true);
+    } else {
+      // Show highlight creator by default
+      setShowHighlightCreator(true);
+    }
+    
     onTextSelected?.(selection);
-  }, [onTextSelected]);
+  }, [onTextSelected, responsive.isMobile]);
 
   const handleSelectionCleared = useCallback(() => {
     if (!showHighlightCreator) {
@@ -379,25 +419,42 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
 
   // Handle area clicks for comment creation
   const handleAreaClick = useCallback((event: React.MouseEvent | React.TouchEvent) => {
+    console.log('💬 handleAreaClick triggered', { 
+      isSelecting, 
+      showHighlightCreator, 
+      showCommentCreator,
+      showCTACreator,
+      eventType: event.type 
+    });
+    
     // Only prevent default for mouse events, not touch events (to avoid passive listener warning)
     if ('clientX' in event) {
       event.preventDefault();
     }
     event.stopPropagation();
     
-    // Only handle clicks if not currently selecting text or creating highlights
-    if (isSelecting || showHighlightCreator) {
+    // Only handle clicks if not currently creating highlights
+    if (showHighlightCreator) {
+      console.log('💬 Skipping comment creation - highlight creation in progress');
       return;
     }
 
     // Check if there's an active text selection - don't create comments if user is selecting text
     const selection = window.getSelection();
-    if (selection && !selection.isCollapsed) {
+    if (selection && !selection.isCollapsed && selection.toString().trim().length > 0) {
+      console.log('💬 Skipping comment creation - text is selected:', selection.toString());
+      return;
+    }
+
+    // Allow comment creation even if isSelecting is true, but only if no actual text is selected
+    if (isSelecting && selection && !selection.isCollapsed) {
+      console.log('💬 Skipping comment creation - text selection in progress');
       return;
     }
 
     const pageElement = pageRef.current;
     if (!pageElement) {
+      console.log('💬 No page element found');
       return;
     }
 
@@ -425,14 +482,48 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
 
     const coordinates: AreaCoordinates = { x, y };
     
-    // Set up comment creation
-    setPendingCommentCoordinates(coordinates);
-    setShowCommentCreator(true);
+    console.log('💬 Setting up comment creation', { coordinates, pageNumber });
     
-    if (onAreaClick) {
-      onAreaClick(coordinates, pageNumber);
-    }
-  }, [isSelecting, showHighlightCreator, effectiveScale, pageNumber, onAreaClick]);
+    // Small delay to ensure text selection events have finished processing
+    setTimeout(() => {
+      // Double-check that no text is selected after the delay
+      const finalSelection = window.getSelection();
+      if (finalSelection && !finalSelection.isCollapsed && finalSelection.toString().trim().length > 0) {
+        console.log('💬 Canceling comment/CTA creation - text was selected during delay');
+        return;
+      }
+      
+      // Check if Shift key is held for CTA creation
+      console.log('🔍 Checking event keys:', {
+        shiftKey: event.shiftKey,
+        ctrlKey: event.ctrlKey,
+        altKey: event.altKey,
+        metaKey: event.metaKey
+      });
+      
+      if (event.shiftKey) {
+        console.log('🔗 Setting up CTA creation (Shift+Click)');
+        // Convert area coordinates to rectangle coordinates for CTA
+        const rectCoordinates: RectangleCoordinates = {
+          x: coordinates.x,
+          y: coordinates.y,
+          width: 100, // Default width
+          height: 30  // Default height
+        };
+        setPendingCTACoordinates(rectCoordinates);
+        setShowCTACreator(true);
+      } else {
+        console.log('💬 Setting up comment creation (no Shift key)');
+        // Set up comment creation
+        setPendingCommentCoordinates(coordinates);
+        setShowCommentCreator(true);
+      }
+      
+      if (onAreaClick) {
+        onAreaClick(coordinates, pageNumber);
+      }
+    }, 150); // 150ms delay to allow text selection to complete
+  }, [isSelecting, showHighlightCreator, showCommentCreator, effectiveScale, pageNumber, onAreaClick]);
 
   // Handle comment creation
   const handleCommentCreate = useCallback((content: string, coordinates: AreaCoordinates) => {
@@ -445,6 +536,23 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
   const handleCommentCreatorCancel = useCallback(() => {
     setShowCommentCreator(false);
     setPendingCommentCoordinates(null);
+  }, []);
+
+  // Handle CTA creation
+  const handleCTACreate = useCallback((url: string, label: string, coordinates: RectangleCoordinates) => {
+    console.log('🔗 PdfDisplay: Creating CTA:', { url, label, coordinates, pageNumber, hasOnCTACreate: !!onCTACreate });
+    if (onCTACreate) {
+      onCTACreate(url, label, coordinates, pageNumber);
+    } else {
+      console.error('🔗 No onCTACreate handler provided!');
+    }
+    setShowCTACreator(false);
+    setPendingCTACoordinates(null);
+  }, [onCTACreate, pageNumber]);
+
+  const handleCTACreatorCancel = useCallback(() => {
+    setShowCTACreator(false);
+    setPendingCTACoordinates(null);
   }, []);
 
   const handleCommentClick = useCallback((comment: Comment) => {
@@ -489,14 +597,21 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
       const touch = touches[0];
       setTouchStartX(touch.clientX);
       
+      // Only prevent default for double tap if we're actually zooming
       if (currentTime - lastTouchTime < 300) {
-        // Double tap detected - toggle zoom and prevent text selection
-        if (scale > 1.0) {
-          onScaleChange?.(1.0);
-        } else {
-          onScaleChange?.(2.0);
+        // Double tap detected - toggle zoom but be more careful about preventing text selection
+        const selection = window.getSelection();
+        const hasTextSelection = selection && !selection.isCollapsed;
+        
+        // Only handle double tap zoom if there's no active text selection
+        if (!hasTextSelection) {
+          if (scale > 1.0) {
+            onScaleChange?.(1.0);
+          } else {
+            onScaleChange?.(2.0);
+          }
+          event.preventDefault();
         }
-        event.preventDefault();
       }
       setLastTouchTime(currentTime);
     }
@@ -515,6 +630,7 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
       event.preventDefault();
     }
     // For single touch, allow default behavior (text selection)
+    // Don't prevent default for single touch to allow text selection
   }, [touchStartDistance, touchStartScale, getTouchDistance, onScaleChange]);
 
   const handleTouchEnd = useCallback((event: React.TouchEvent) => {
@@ -614,7 +730,12 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
               ref={pageRef} 
               data-page-number={pageNumber}
               onClick={(e) => {
-                console.log('💬 PageContainer clicked!');
+                console.log('💬 PageContainer clicked!', { 
+                  target: e.target, 
+                  currentTarget: e.currentTarget,
+                  showCommentCreator,
+                  showHighlightCreator 
+                });
                 handleAreaClick(e);
               }}
               onTouchStart={handleTouchStart}
@@ -622,7 +743,7 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
               onTouchEnd={(e) => {
                 handleTouchEnd(e);
                 handleSwipeGesture(e);
-                console.log('💬 PageContainer touch ended!');
+                console.log('💬 PageContainer touch ended!', { showCommentCreator, showHighlightCreator });
                 handleAreaClick(e);
               }}
             >
@@ -681,6 +802,97 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
             isVisible={showHighlightCreator}
           />
           
+          {/* Debug info for highlighting and CTA */}
+          {process.env.NODE_ENV === 'development' && (
+            <>
+              <div style={{
+                position: 'fixed',
+                top: '160px',
+                right: '10px',
+                zIndex: 9999,
+                background: showHighlightCreator ? 'purple' : 'gray',
+                color: 'white',
+                padding: '5px',
+                borderRadius: '3px',
+                fontSize: '12px'
+              }}>
+                HIGHLIGHT: {showHighlightCreator ? 'SHOWING' : 'HIDDEN'}
+                {pendingSelection && <div>Text: {pendingSelection.text.substring(0, 20)}...</div>}
+              </div>
+              
+              <div style={{
+                position: 'fixed',
+                top: '210px',
+                right: '10px',
+                zIndex: 9999,
+                background: showCTACreator ? 'red' : 'gray',
+                color: 'white',
+                padding: '5px',
+                borderRadius: '3px',
+                fontSize: '12px'
+              }}>
+                CTA: {showCTACreator ? 'SHOWING' : 'HIDDEN'}
+                {pendingCTACoordinates && <div>Coords: {Math.round(pendingCTACoordinates.x)},{Math.round(pendingCTACoordinates.y)}</div>}
+              </div>
+              
+              {/* Manual CTA creator test buttons */}
+              <div style={{
+                position: 'fixed',
+                top: '260px',
+                right: '10px',
+                zIndex: 9999,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '5px'
+              }}>
+                <button
+                  onClick={() => {
+                    console.log('🧪 Manual test: Opening CTA creator at 200x200');
+                    const testCoords = { x: 200, y: 200, width: 100, height: 30 };
+                    console.log('🧪 Setting coordinates:', testCoords);
+                    setPendingCTACoordinates(testCoords);
+                    console.log('🧪 Setting showCTACreator to true');
+                    setShowCTACreator(true);
+                    console.log('🧪 CTA creator should now be visible');
+                  }}
+                  style={{
+                    background: 'orange',
+                    color: 'white',
+                    border: 'none',
+                    padding: '5px',
+                    borderRadius: '3px',
+                    fontSize: '10px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Test CTA UI
+                </button>
+                
+                <button
+                  onClick={() => {
+                    console.log('🧪 Debug: Current CTA state', {
+                      showCTACreator,
+                      pendingCTACoordinates,
+                      showCommentCreator,
+                      showHighlightCreator
+                    });
+                  }}
+                  style={{
+                    background: 'purple',
+                    color: 'white',
+                    border: 'none',
+                    padding: '5px',
+                    borderRadius: '3px',
+                    fontSize: '10px',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Debug State
+                </button>
+              </div>
+            </>
+          )}
+          
           {/* Comment creator modal */}
           <CommentCreator
             coordinates={pendingCommentCoordinates}
@@ -689,6 +901,53 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
             onCancel={handleCommentCreatorCancel}
             isVisible={showCommentCreator}
           />
+          
+          {/* CTA creator modal */}
+          <CTACreator
+            coordinates={pendingCTACoordinates}
+            pageNumber={pageNumber}
+            onCreateCTA={handleCTACreate}
+            onCancel={handleCTACreatorCancel}
+            isVisible={showCTACreator}
+          />
+          
+          {/* Debug indicators for testing */}
+          {process.env.NODE_ENV === 'development' && (
+            <>
+              <div style={{
+                position: 'fixed',
+                top: '10px',
+                right: '10px',
+                zIndex: 9999,
+                background: 'red',
+                color: 'white',
+                padding: '10px',
+                borderRadius: '5px',
+                cursor: 'pointer'
+              }}
+              onClick={() => {
+                console.log('💬 Debug button clicked - forcing comment creation');
+                setPendingCommentCoordinates({ x: 100, y: 100 });
+                setShowCommentCreator(true);
+              }}>
+                Test Comment
+              </div>
+              
+              <div style={{
+                position: 'fixed',
+                top: '60px',
+                right: '10px',
+                zIndex: 9999,
+                background: responsive.isMobile ? 'green' : 'blue',
+                color: 'white',
+                padding: '5px',
+                borderRadius: '3px',
+                fontSize: '12px'
+              }}>
+                {responsive.isMobile ? 'MOBILE' : 'DESKTOP'} ({responsive.screenWidth}px)
+              </div>
+            </>
+          )}
         </Document>
       </DocumentContainer>
     </Container>

@@ -41,8 +41,17 @@ export const useTextSelection = ({
   const handleSelectionChange = useCallback(() => {
     const selection = window.getSelection();
     
+    console.log('📝 Text selection change:', {
+      hasSelection: !!selection,
+      rangeCount: selection?.rangeCount || 0,
+      isCollapsed: selection?.isCollapsed,
+      selectedText: selection?.toString(),
+      pageElement: !!pageElementRef.current
+    });
+    
     if (!selection || !pageElementRef.current) {
       if (currentSelection) {
+        console.log('📝 Clearing selection - no selection or page element');
         setCurrentSelection(null);
         setIsSelecting(false);
         onSelectionCleared?.();
@@ -54,6 +63,7 @@ export const useTextSelection = ({
     const range = selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
     if (!range || !pageElementRef.current.contains(range.commonAncestorContainer)) {
       if (currentSelection) {
+        console.log('📝 Clearing selection - not within page element');
         setCurrentSelection(null);
         setIsSelecting(false);
         onSelectionCleared?.();
@@ -68,34 +78,63 @@ export const useTextSelection = ({
       scale
     );
 
+    console.log('📝 Extracted text selection:', textSelection);
+
     if (textSelection) {
+      console.log('📝 Setting text selection:', textSelection.text);
       setCurrentSelection(textSelection);
       setIsSelecting(false);
       debouncedCallbackRef.current?.(textSelection);
     } else if (currentSelection) {
+      console.log('📝 Clearing selection - extraction failed');
       setCurrentSelection(null);
       setIsSelecting(false);
       onSelectionCleared?.();
     }
   }, [pageNumber, scale, currentSelection, onSelectionCleared]);
 
-  const handleMouseDown = useCallback(() => {
-    setIsSelecting(true);
+  const handleMouseDown = useCallback((event: MouseEvent) => {
+    // Only set selecting if the mousedown is within our page element
+    if (pageElementRef.current && pageElementRef.current.contains(event.target as Node)) {
+      setIsSelecting(true);
+    }
   }, []);
 
-  const handleMouseUp = useCallback(() => {
-    // Small delay to ensure selection is complete
-    setTimeout(handleSelectionChange, 10);
+  const handleMouseUp = useCallback((event: MouseEvent) => {
+    // Only handle if the mouseup is within our page element
+    if (pageElementRef.current && pageElementRef.current.contains(event.target as Node)) {
+      // Small delay to ensure selection is complete
+      setTimeout(() => {
+        setIsSelecting(false);
+        handleSelectionChange();
+      }, 10);
+    } else {
+      setIsSelecting(false);
+    }
   }, [handleSelectionChange]);
 
   // Touch event handlers for better mobile support
-  const handleTouchStart = useCallback(() => {
-    setIsSelecting(true);
+  const handleTouchStart = useCallback((event: TouchEvent) => {
+    // Only set selecting if the touchstart is within our page element
+    if (pageElementRef.current && event.target && pageElementRef.current.contains(event.target as Node)) {
+      console.log('📝 Touch start - setting selecting to true');
+      setIsSelecting(true);
+    }
   }, []);
 
-  const handleTouchEnd = useCallback(() => {
-    // Longer delay for touch devices to ensure selection is complete
-    setTimeout(handleSelectionChange, 100);
+  const handleTouchEnd = useCallback((event: TouchEvent) => {
+    // Only handle if the touchend is within our page element
+    if (pageElementRef.current && event.target && pageElementRef.current.contains(event.target as Node)) {
+      console.log('📝 Touch end - checking selection after delay');
+      // Longer delay for touch devices to ensure selection is complete
+      setTimeout(() => {
+        setIsSelecting(false);
+        handleSelectionChange();
+      }, 200); // Increased delay for better mobile support
+    } else {
+      console.log('📝 Touch end - outside page element');
+      setIsSelecting(false);
+    }
   }, [handleSelectionChange]);
 
   const clearSelection = useCallback(() => {
@@ -114,11 +153,14 @@ export const useTextSelection = ({
       }
     };
 
+    // Add passive listeners for better mobile performance
+    const options = { passive: true };
+    
     document.addEventListener('selectionchange', handleDocumentSelectionChange);
     document.addEventListener('mousedown', handleMouseDown);
     document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('touchstart', handleTouchStart);
-    document.addEventListener('touchend', handleTouchEnd);
+    document.addEventListener('touchstart', handleTouchStart, options);
+    document.addEventListener('touchend', handleTouchEnd, options);
 
     return () => {
       document.removeEventListener('selectionchange', handleDocumentSelectionChange);
@@ -127,7 +169,7 @@ export const useTextSelection = ({
       document.removeEventListener('touchstart', handleTouchStart);
       document.removeEventListener('touchend', handleTouchEnd);
     };
-  }, [handleSelectionChange, handleMouseDown, handleMouseUp, isSelecting]);
+  }, [handleSelectionChange, handleMouseDown, handleMouseUp, handleTouchStart, handleTouchEnd, isSelecting]);
 
   // Expose method to set page element reference
   const setPageElement = useCallback((element: HTMLElement | null) => {

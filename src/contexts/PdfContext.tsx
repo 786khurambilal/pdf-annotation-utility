@@ -61,9 +61,16 @@ function pdfReducer(state: PdfState, action: PdfAction): PdfState {
         totalPages: action.payload,
       };
     case 'SET_CURRENT_PAGE':
+      const newPage = Math.min(Math.max(1, action.payload), state.totalPages || action.payload);
+      console.log('📄 PdfContext reducer: SET_CURRENT_PAGE', {
+        requested: action.payload,
+        current: state.currentPage,
+        totalPages: state.totalPages,
+        newPage
+      });
       return {
         ...state,
-        currentPage: Math.min(Math.max(1, action.payload), state.totalPages || 1),
+        currentPage: newPage,
       };
     case 'SET_SCALE':
       return {
@@ -120,8 +127,13 @@ export const PdfProvider: React.FC<PdfProviderProps> = ({ children }) => {
   }, []);
 
   const setCurrentPage = useCallback((page: number) => {
+    console.log('📄 PdfContext: Setting current page', { 
+      from: state.currentPage, 
+      to: page, 
+      totalPages: state.totalPages 
+    });
     dispatch({ type: 'SET_CURRENT_PAGE', payload: page });
-  }, []);
+  }, [state.currentPage, state.totalPages]);
 
   const setScale = useCallback((scale: number) => {
     dispatch({ type: 'SET_SCALE', payload: scale });

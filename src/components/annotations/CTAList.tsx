@@ -353,7 +353,7 @@ export const CTAList: React.FC<CTAListProps> = ({
           <EmptyState>
             No call-to-actions created yet.
             <br />
-            Create one by selecting an area in the PDF and choosing "Add Call-to-Action".
+            Create one by holding Shift and clicking on the PDF, or by holding Ctrl/Cmd while selecting text.
           </EmptyState>
         ) : (
           sortedCTAs.map((cta) => (

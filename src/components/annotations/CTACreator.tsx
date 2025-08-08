@@ -190,7 +190,15 @@ export const CTACreator: React.FC<CTACreatorProps> = ({
 
   // Reset form when modal becomes visible
   useEffect(() => {
+    console.log('🔗 CTACreator: Props changed', {
+      isVisible,
+      hasCoordinates: !!coordinates,
+      coordinates,
+      pageNumber
+    });
+    
     if (isVisible) {
+      console.log('🔗 CTACreator: Becoming visible, resetting form');
       setUrl('');
       setLabel('');
       setUrlError(null);
@@ -304,9 +312,18 @@ export const CTACreator: React.FC<CTACreatorProps> = ({
     }
   }, [handleCancel]);
 
+  console.log('🔗 CTACreator: Render called', {
+    isVisible,
+    hasCoordinates: !!coordinates,
+    coordinates
+  });
+  
   if (!isVisible || !coordinates) {
+    console.log('🔗 CTACreator: Not rendering - isVisible:', isVisible, 'coordinates:', coordinates);
     return null;
   }
+  
+  console.log('🔗 CTACreator: Rendering modal');
 
   const isFormValid = url.trim() && label.trim() && validateURL(url.trim()) && !isSubmitting;
 

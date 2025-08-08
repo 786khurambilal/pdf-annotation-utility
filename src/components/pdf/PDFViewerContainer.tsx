@@ -565,12 +565,46 @@ export const PDFViewerContainer: React.FC<PDFViewerContainerProps> = ({
     createComment(pageNumber, content, coordinates);
   }, [currentUser, pdfState.documentId, createComment]);
 
+  // Handle CTA creation
+  const handleCTACreateFromPDF = useCallback((url: string, label: string, coordinates: RectangleCoordinates, pageNumber: number) => {
+    console.log('🔗 PDFViewerContainer handleCTACreate called', { url, label, coordinates, pageNumber, currentUser: currentUser?.id, documentId: pdfState.documentId });
+    
+    if (!currentUser || !pdfState.documentId) {
+      console.log('🔗 Cannot create CTA - missing user or document');
+      return;
+    }
+
+    createCallToAction(pageNumber, url, label, coordinates);
+  }, [currentUser, pdfState.documentId, createCallToAction]);
+
   const handleCommentClick = useCallback((comment: Comment) => {
+    console.log('💬 PDFViewerContainer: Comment clicked:', {
+      commentId: comment.id,
+      pageNumber: comment.pageNumber,
+      currentPage: pdfState.currentPage,
+      totalPages: pdfState.totalPages,
+      isMobile: responsive.isMobile,
+      screenWidth: responsive.screenWidth,
+      sidebarOpen,
+      willNavigate: comment.pageNumber !== pdfState.currentPage
+    });
+    
     // Navigate to the comment's page if not already there
     if (comment.pageNumber !== pdfState.currentPage) {
+      console.log('💬 Navigating to page:', comment.pageNumber, 'from page:', pdfState.currentPage);
       setCurrentPage(comment.pageNumber);
+    } else {
+      console.log('💬 Already on the correct page:', comment.pageNumber);
     }
-  }, [pdfState.currentPage, setCurrentPage]);
+    
+    // Close sidebar on mobile after navigation with a small delay
+    if (responsive.isMobile) {
+      console.log('💬 Closing sidebar on mobile');
+      setTimeout(() => {
+        setSidebarOpen(false);
+      }, 100); // Small delay to ensure page navigation starts first
+    }
+  }, [pdfState.currentPage, pdfState.totalPages, setCurrentPage, responsive.isMobile, responsive.screenWidth, sidebarOpen]);
 
   const handleCommentEdit = useCallback((commentId: string, newContent: string) => {
     updateComment(commentId, { content: newContent });
@@ -579,6 +613,32 @@ export const PDFViewerContainer: React.FC<PDFViewerContainerProps> = ({
   const handleCommentDelete = useCallback((commentId: string) => {
     deleteComment(commentId);
   }, [deleteComment]);
+
+  // Handle CTA click
+  const handleCTAClick = useCallback((cta: CallToAction) => {
+    console.log('🔗 CTA clicked:', {
+      ctaId: cta.id,
+      pageNumber: cta.pageNumber,
+      currentPage: pdfState.currentPage,
+      isMobile: responsive.isMobile,
+      screenWidth: responsive.screenWidth,
+      sidebarOpen
+    });
+    
+    // Navigate to the CTA's page if not already there
+    if (cta.pageNumber !== pdfState.currentPage) {
+      console.log('🔗 Navigating to page:', cta.pageNumber);
+      setCurrentPage(cta.pageNumber);
+    }
+    
+    // Close sidebar on mobile after navigation with a small delay
+    if (responsive.isMobile) {
+      console.log('🔗 Closing sidebar on mobile');
+      setTimeout(() => {
+        setSidebarOpen(false);
+      }, 100); // Small delay to ensure page navigation starts first
+    }
+  }, [pdfState.currentPage, setCurrentPage, responsive.isMobile, responsive.screenWidth, sidebarOpen]);
 
   // Handle bookmark creation
   const handleCreateBookmark = useCallback(() => {
@@ -593,9 +653,25 @@ export const PDFViewerContainer: React.FC<PDFViewerContainerProps> = ({
   }, [currentUser, pdfState.documentId, pdfState.file, pdfState.currentPage, createBookmark]);
 
   const handleBookmarkClick = useCallback((bookmark: Bookmark) => {
+    console.log('📖 Bookmark clicked:', {
+      bookmarkId: bookmark.id,
+      pageNumber: bookmark.pageNumber,
+      isMobile: responsive.isMobile,
+      screenWidth: responsive.screenWidth,
+      sidebarOpen
+    });
+    
     setCurrentPage(bookmark.pageNumber);
     setShowBookmarkPanel(false);
-  }, [setCurrentPage]);
+    
+    // Close sidebar on mobile after navigation with a small delay
+    if (responsive.isMobile) {
+      console.log('📖 Closing sidebar on mobile');
+      setTimeout(() => {
+        setSidebarOpen(false);
+      }, 100); // Small delay to ensure page navigation starts first
+    }
+  }, [setCurrentPage, responsive.isMobile, responsive.screenWidth, sidebarOpen]);
 
   const handleBookmarkEdit = useCallback((bookmark: Bookmark) => {
     updateBookmark(bookmark.id, {
@@ -743,12 +819,13 @@ export const PDFViewerContainer: React.FC<PDFViewerContainerProps> = ({
         return (
           <CTAList
             callToActions={currentDocumentCTAs}
-            onCTAClick={(cta) => {
-              if (cta.pageNumber !== pdfState.currentPage) {
-                setCurrentPage(cta.pageNumber);
-              }
+            onCTAClick={handleCTAClick}
+            onCTAEdit={(cta) => {
+              console.log('🔗 CTA edit requested:', cta);
+              // For now, just log the edit request
+              // TODO: Implement CTA editing modal or inline editing
+              alert(`CTA Edit: ${cta.label} (${cta.url})\nEditing functionality coming soon!`);
             }}
-            onCTAEdit={(id, updates) => updateCallToAction(id, updates)}
             onCTADelete={deleteCallToAction}
           />
         );
@@ -767,6 +844,129 @@ export const PDFViewerContainer: React.FC<PDFViewerContainerProps> = ({
       </Header>
 
       <MainContent>
+        {/* Debug indicators */}
+        {process.env.NODE_ENV === 'development' && (
+          <>
+            <div style={{
+              position: 'fixed',
+              top: '110px',
+              right: '10px',
+              zIndex: 9999,
+              background: sidebarOpen ? 'orange' : 'gray',
+              color: 'white',
+              padding: '5px',
+              borderRadius: '3px',
+              fontSize: '12px'
+            }}>
+              SIDEBAR: {sidebarOpen ? 'OPEN' : 'CLOSED'}
+            </div>
+            
+            <div style={{
+              position: 'fixed',
+              top: '160px',
+              right: '10px',
+              zIndex: 9999,
+              background: 'blue',
+              color: 'white',
+              padding: '5px',
+              borderRadius: '3px',
+              fontSize: '12px'
+            }}>
+              PAGE: {pdfState.currentPage}/{pdfState.totalPages}
+            </div>
+            
+            {/* Manual test buttons */}
+            <div style={{
+              position: 'fixed',
+              top: '210px',
+              right: '10px',
+              zIndex: 9999,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '5px'
+            }}>
+              <button
+                onClick={() => {
+                  console.log('🧪 Manual test: Going to page 1');
+                  setCurrentPage(1);
+                }}
+                style={{
+                  background: 'green',
+                  color: 'white',
+                  border: 'none',
+                  padding: '5px',
+                  borderRadius: '3px',
+                  fontSize: '10px',
+                  cursor: 'pointer'
+                }}
+              >
+                Go to Page 1
+              </button>
+              <button
+                onClick={() => {
+                  console.log('🧪 Manual test: Going to page 2');
+                  setCurrentPage(2);
+                }}
+                style={{
+                  background: 'green',
+                  color: 'white',
+                  border: 'none',
+                  padding: '5px',
+                  borderRadius: '3px',
+                  fontSize: '10px',
+                  cursor: 'pointer'
+                }}
+              >
+                Go to Page 2
+              </button>
+              <button
+                onClick={() => {
+                  console.log('🧪 Manual test: Creating CTA');
+                  if (currentUser && pdfState.documentId) {
+                    const testCoords = { x: 100, y: 100, width: 100, height: 30 };
+                    createCallToAction(pdfState.currentPage, 'https://google.com', 'Test CTA', testCoords);
+                  } else {
+                    console.log('🧪 Cannot create CTA - missing user or document', {
+                      hasUser: !!currentUser,
+                      hasDocument: !!pdfState.documentId
+                    });
+                  }
+                }}
+                style={{
+                  background: 'red',
+                  color: 'white',
+                  border: 'none',
+                  padding: '5px',
+                  borderRadius: '3px',
+                  fontSize: '10px',
+                  cursor: 'pointer'
+                }}
+              >
+                Test CTA
+              </button>
+              <button
+                onClick={() => {
+                  console.log('🧪 Manual test: Opening CTA creator');
+                  // This would need to be passed down to PdfDisplay
+                  // For now, just log the attempt
+                  console.log('🧪 Would open CTA creator at coordinates {x: 200, y: 200}');
+                }}
+                style={{
+                  background: 'purple',
+                  color: 'white',
+                  border: 'none',
+                  padding: '5px',
+                  borderRadius: '3px',
+                  fontSize: '10px',
+                  cursor: 'pointer'
+                }}
+              >
+                Open CTA UI
+              </button>
+            </div>
+          </>
+        )}
+        
         {/* Sidebar overlay for mobile */}
         <SidebarOverlay isVisible={sidebarOpen && responsive.isMobile} onClick={handleSidebarOverlayClick} />
         
@@ -839,6 +1039,7 @@ export const PDFViewerContainer: React.FC<PDFViewerContainerProps> = ({
               <PdfViewerWrapper data-pdf-viewer-container>
                 {enableVirtualization ? (
                   <VirtualizedPdfDisplay
+                    key={`virtualized-pdf-page-${pdfState.currentPage}`} // Force re-render on page change
                     file={pdfState.file}
                     pageNumber={pdfState.currentPage}
                     scale={pdfState.scale}
@@ -860,6 +1061,7 @@ export const PDFViewerContainer: React.FC<PDFViewerContainerProps> = ({
                   />
                 ) : (
                   <PdfDisplay
+                    key={`pdf-page-${pdfState.currentPage}`} // Force re-render on page change
                     file={pdfState.file}
                     pageNumber={pdfState.currentPage}
                     scale={pdfState.scale}
@@ -876,6 +1078,7 @@ export const PDFViewerContainer: React.FC<PDFViewerContainerProps> = ({
                     onCommentClick={handleCommentClick}
                     onCommentEdit={handleCommentEdit}
                     onCommentDelete={handleCommentDelete}
+                    onCTACreate={handleCTACreateFromPDF}
                     onScaleChange={handleScaleChange}
                     onPageChange={handlePageChange}
                   />

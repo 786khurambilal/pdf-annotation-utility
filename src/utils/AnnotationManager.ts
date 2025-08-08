@@ -462,7 +462,7 @@ export class AnnotationManager {
     ctaId: string,
     updates: Partial<Pick<CallToAction, 'url' | 'label'>>
   ): CallToAction {
-    if (!userId?.trim() || !documentId?.trim() || !ctaId?.trim()) {
+    if (!userId?.trim() || !documentId?.trim() || !ctaId || typeof ctaId !== 'string' || !ctaId.trim()) {
       throw new Error('User ID, document ID, and call-to-action ID are required');
     }
 

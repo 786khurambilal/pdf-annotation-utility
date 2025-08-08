@@ -268,6 +268,11 @@ export const CommentList: React.FC<CommentListProps> = ({
   }, [onCommentDelete]);
 
   const handleCommentClick = useCallback((comment: Comment) => {
+    console.log('💬 CommentList: Comment clicked', {
+      commentId: comment.id,
+      pageNumber: comment.pageNumber,
+      hasOnCommentClick: !!onCommentClick
+    });
     onCommentClick?.(comment);
   }, [onCommentClick]);
 
@@ -379,8 +384,16 @@ export const CommentList: React.FC<CommentListProps> = ({
                 </>
               ) : (
                 <CommentContent
-                  onClick={() => handleCommentClick(comment)}
-                  style={{ cursor: onCommentClick ? 'pointer' : 'default' }}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    console.log('💬 CommentContent clicked, calling handleCommentClick');
+                    handleCommentClick(comment);
+                  }}
+                  style={{ 
+                    cursor: onCommentClick ? 'pointer' : 'default',
+                    userSelect: 'none' // Prevent text selection interfering with clicks
+                  }}
                 >
                   {comment.content}
                 </CommentContent>

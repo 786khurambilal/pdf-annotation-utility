@@ -251,14 +251,21 @@ export const CommentCreator: React.FC<CommentCreatorProps> = ({
     }
   }, [handleCancel]);
 
-  console.log('💬 CommentCreator render:', { isVisible, coordinates, pageNumber });
+  console.log('💬 CommentCreator render:', { 
+    isVisible, 
+    coordinates, 
+    pageNumber,
+    content: content.length,
+    error,
+    isSubmitting 
+  });
   
   if (!isVisible || !coordinates) {
     console.log('💬 CommentCreator not rendering - isVisible:', isVisible, 'coordinates:', coordinates);
     return null;
   }
   
-  console.log('💬 CommentCreator rendering modal');
+  console.log('💬 CommentCreator rendering modal with coordinates:', coordinates);
 
   return (
     <ModalOverlay isVisible={isVisible} onClick={handleOverlayClick}>
