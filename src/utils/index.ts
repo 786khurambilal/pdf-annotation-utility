@@ -4,3 +4,6 @@ export * from './annotationUtils';
 export * from './storageUtils';
 export * from './LocalStorageService';
 export * from './AnnotationManager';
+export * from './QRCodeScanner';
+export * from './PageContentExtractor';
+export * from './AutoCTAGenerator';

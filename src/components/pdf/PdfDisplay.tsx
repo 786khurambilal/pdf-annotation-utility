@@ -6,7 +6,7 @@ import styled from 'styled-components';
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 import { ZoomMode } from './ZoomControls';
-import { TextSelection, Highlight, Comment, AreaCoordinates, RectangleCoordinates } from '../../types/annotation.types';
+import { TextSelection, Highlight, Comment, CallToAction, AreaCoordinates, RectangleCoordinates } from '../../types/annotation.types';
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { useResponsive } from '../../hooks/useResponsive';
 import { usePDFErrors } from '../../hooks/useErrorHandler';
@@ -15,6 +15,7 @@ import { HighlightOverlay } from '../annotations/HighlightOverlay';
 import { HighlightCreator } from '../annotations/HighlightCreator';
 import { CommentCreator } from '../annotations/CommentCreator';
 import { CommentOverlay } from '../annotations/CommentOverlay';
+import { CTAOverlay } from '../annotations/CTAOverlay';
 import { CTACreator } from '../annotations/CTACreator';
 import { PDFLoadingSpinner, PageLoadingSpinner } from '../common/LoadingSpinner';
 
@@ -25,6 +26,7 @@ interface PdfDisplayProps {
   zoomMode?: ZoomMode;
   highlights?: Highlight[];
   comments?: Comment[];
+  callToActions?: CallToAction[];
   onLoadSuccess?: (pdf: any) => void;
   onLoadError?: (error: Error) => void;
   onPageLoadSuccess?: (page: any) => void;
@@ -40,6 +42,9 @@ interface PdfDisplayProps {
   onCommentDelete?: (commentId: string) => void;
   onCommentHover?: (comment: Comment | null) => void;
   onCTACreate?: (url: string, label: string, coordinates: RectangleCoordinates, pageNumber: number) => void;
+  onCTAClick?: (cta: CallToAction) => void;
+  onCTAUpdate?: (ctaId: string, updates: { url: string; label: string }) => void;
+  onCTADelete?: (ctaId: string) => void;
   onScaleChange?: (scale: number) => void;
   onPageChange?: (page: number) => void;
 }
@@ -210,6 +215,7 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
   zoomMode = 'custom',
   highlights = [],
   comments = [],
+  callToActions = [],
   onLoadSuccess,
   onLoadError,
   onPageLoadSuccess,
@@ -225,6 +231,9 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
   onCommentDelete,
   onCommentHover,
   onCTACreate,
+  onCTAClick,
+  onCTAUpdate,
+  onCTADelete,
   onScaleChange,
   onPageChange
 }) => {
@@ -571,6 +580,22 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
     onCommentHover?.(comment);
   }, [onCommentHover]);
 
+  // CTA handlers
+  const handleCTAClick = useCallback((cta: CallToAction) => {
+    console.log('🔗 CTA clicked:', cta);
+    onCTAClick?.(cta);
+  }, [onCTAClick]);
+
+  const handleCTAUpdate = useCallback((ctaId: string, updates: { url: string; label: string }) => {
+    console.log('🔗 CTA update:', ctaId, updates);
+    onCTAUpdate?.(ctaId, updates);
+  }, [onCTAUpdate]);
+
+  const handleCTADelete = useCallback((ctaId: string) => {
+    console.log('🔗 CTA delete:', ctaId);
+    onCTADelete?.(ctaId);
+  }, [onCTADelete]);
+
   // Touch gesture handlers
   const getTouchDistance = useCallback((touches: React.TouchList): number => {
     if (touches.length < 2) return 0;
@@ -788,6 +813,16 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
                 onCommentEdit={handleCommentEdit}
                 onCommentDelete={handleCommentDelete}
                 onCommentHover={handleCommentHover}
+              />
+              
+              {/* CTA overlay - makes QR code areas clickable */}
+              <CTAOverlay
+                callToActions={callToActions}
+                pageNumber={pageNumber}
+                scale={effectiveScale}
+                onCTAClick={handleCTAClick}
+                onCTAUpdate={handleCTAUpdate}
+                onCTADelete={handleCTADelete}
               />
               
 

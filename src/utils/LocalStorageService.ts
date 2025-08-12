@@ -349,7 +349,24 @@ export class LocalStorageService {
     }
 
     this.updateAccessTime(key);
-    return this.deserializeAnnotations(data);
+    
+    try {
+      return this.deserializeAnnotations(data);
+    } catch (error) {
+      if (error instanceof StorageValidationError) {
+        // If it's a validation error, clear storage and return empty annotations
+        console.warn('🧹 Storage validation failed, clearing storage for user:', userId, 'document:', documentId);
+        this.deleteAnnotations(userId, documentId);
+        return {
+          highlights: [],
+          comments: [],
+          bookmarks: [],
+          callToActions: []
+        };
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   /**

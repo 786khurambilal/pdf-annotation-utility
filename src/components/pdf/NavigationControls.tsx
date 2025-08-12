@@ -190,7 +190,10 @@ export const NavigationControls: React.FC<NavigationControlsProps> = ({
   const isNextDisabled = disabled || currentPage >= totalPages;
 
   return (
-    <Container>
+    <Container 
+      data-testid={responsive.isMobile ? "mobile-navigation" : "navigation"}
+      className={responsive.isMobile ? "mobile-compact" : ""}
+    >
       <Button
         onClick={handlePreviousPage}
         disabled={isPreviousDisabled}
