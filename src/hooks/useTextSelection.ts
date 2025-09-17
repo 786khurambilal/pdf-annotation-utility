@@ -14,6 +14,7 @@ interface UseTextSelectionReturn {
   currentSelection: TextSelection | null;
   clearSelection: () => void;
   isSelecting: boolean;
+  setPageElement: (element: HTMLElement | null) => void;
 }
 
 /**
@@ -40,7 +41,7 @@ export const useTextSelection = ({
 
   const handleSelectionChange = useCallback(() => {
     const selection = window.getSelection();
-    
+
     console.log('📝 Text selection change:', {
       hasSelection: !!selection,
       rangeCount: selection?.rangeCount || 0,
@@ -49,7 +50,7 @@ export const useTextSelection = ({
       pageElement: !!pageElementRef.current,
       isSelecting
     });
-    
+
     if (!selection || !pageElementRef.current) {
       if (currentSelection) {
         console.log('📝 Clearing selection - no selection or page element');
@@ -84,18 +85,18 @@ export const useTextSelection = ({
     try {
       const startContainer = range.startContainer;
       const endContainer = range.endContainer;
-      
+
       // Check if both start and end are within our page element
-      isWithinPage = pageElementRef.current.contains(startContainer) && 
-                     pageElementRef.current.contains(endContainer);
-      
+      isWithinPage = pageElementRef.current.contains(startContainer) &&
+        pageElementRef.current.contains(endContainer);
+
       // Alternative check using range intersection
       if (!isWithinPage) {
         const pageRect = pageElementRef.current.getBoundingClientRect();
         const rangeRect = range.getBoundingClientRect();
         isWithinPage = rangeRect.width > 0 && rangeRect.height > 0 &&
-                      rangeRect.left >= pageRect.left && rangeRect.right <= pageRect.right &&
-                      rangeRect.top >= pageRect.top && rangeRect.bottom <= pageRect.bottom;
+          rangeRect.left >= pageRect.left && rangeRect.right <= pageRect.right &&
+          rangeRect.top >= pageRect.top && rangeRect.bottom <= pageRect.bottom;
       }
     } catch (error) {
       console.log('📝 Error checking selection containment:', error);
@@ -154,48 +155,159 @@ export const useTextSelection = ({
     }
   }, [handleSelectionChange]);
 
-  // Touch event handlers for better mobile support
+  // Enhanced touch event handlers for mobile text selection
   const handleTouchStart = useCallback((event: TouchEvent) => {
-    // Only set selecting if the touchstart is within our page element
-    if (pageElementRef.current && event.target && pageElementRef.current.contains(event.target as Node)) {
-      console.log('📝 Touch start - setting selecting to true');
-      setIsSelecting(true);
+    // Only handle single touch within our page element
+    if (!pageElementRef.current || !event.target || !pageElementRef.current.contains(event.target as Node)) {
+      return;
+    }
+
+    // Don't interfere with multi-touch gestures (pinch zoom)
+    if (event.touches.length > 1) {
+      return;
+    }
+
+    console.log('📝 Touch start - preparing for text selection');
+    setIsSelecting(true);
+
+    // Clear any existing selection to start fresh
+    const selection = window.getSelection();
+    if (selection) {
+      selection.removeAllRanges();
     }
   }, []);
 
+  const handleTouchMove = useCallback((event: TouchEvent) => {
+    // Only handle if we're in selecting mode and within our page element
+    if (!isSelecting || !pageElementRef.current || !event.target || !pageElementRef.current.contains(event.target as Node)) {
+      return;
+    }
+
+    // Don't interfere with multi-touch gestures
+    if (event.touches.length > 1) {
+      setIsSelecting(false);
+      return;
+    }
+
+    console.log('📝 Touch move - text selection in progress');
+
+    // Let the browser handle the selection naturally
+    // We'll check for the result in touchend
+  }, [isSelecting]);
+
   const handleTouchEnd = useCallback((event: TouchEvent) => {
     // Only handle if the touchend is within our page element
-    if (pageElementRef.current && event.target && pageElementRef.current.contains(event.target as Node)) {
-      console.log('📝 Touch end - checking selection after delay');
-      
-      // Multiple checks with increasing delays for mobile
+    if (!pageElementRef.current || !event.target || !pageElementRef.current.contains(event.target as Node)) {
+      console.log('📝 Touch end - outside page element');
+      setIsSelecting(false);
+      return;
+    }
+
+    // Don't interfere with multi-touch gestures
+    if (event.touches.length > 0) {
+      return;
+    }
+
+    console.log('📝 Touch end - checking for text selection');
+
+    // Multiple checks with increasing delays for mobile browsers
+    const checkSelection = (delay: number, attempt: number, maxAttempts: number = 5) => {
       setTimeout(() => {
         const selection = window.getSelection();
         const hasText = selection && selection.toString().trim().length > 0;
-        console.log('📝 First check (100ms):', { hasText, text: selection?.toString() });
-        
-        if (hasText) {
+
+        console.log(`📝 Selection check ${attempt}/${maxAttempts} (${delay}ms):`, {
+          hasText,
+          text: selection?.toString(),
+          rangeCount: selection?.rangeCount,
+          isCollapsed: selection?.isCollapsed
+        });
+
+        if (hasText && !selection.isCollapsed) {
+          console.log('📝 ✅ Text selection detected on mobile!');
           setIsSelecting(false);
           handleSelectionChange();
+        } else if (attempt < maxAttempts) {
+          // Try again with longer delay
+          checkSelection(delay + 150, attempt + 1, maxAttempts);
         } else {
-          // Second check with longer delay
-          setTimeout(() => {
-            const selection2 = window.getSelection();
-            const hasText2 = selection2 && selection2.toString().trim().length > 0;
-            console.log('📝 Second check (400ms):', { hasText: hasText2, text: selection2?.toString() });
-            
-            setIsSelecting(false);
-            if (hasText2) {
-              handleSelectionChange();
-            }
-          }, 300);
+          console.log('📝 ❌ No text selection detected after all attempts');
+          setIsSelecting(false);
         }
-      }, 100);
-    } else {
-      console.log('📝 Touch end - outside page element');
-      setIsSelecting(false);
+      }, delay);
+    };
+
+    // Start checking for selection with multiple attempts
+    checkSelection(100, 1);
+  }, [handleSelectionChange, isSelecting]);
+
+  // Handle long press for mobile text selection
+  const handleTouchStartLongPress = useCallback((event: TouchEvent) => {
+    if (!pageElementRef.current || !event.target || !pageElementRef.current.contains(event.target as Node)) {
+      return;
     }
-  }, [handleSelectionChange]);
+
+    if (event.touches.length !== 1) {
+      return;
+    }
+
+    const touch = event.touches[0];
+    const startTime = Date.now();
+    const startX = touch.clientX;
+    const startY = touch.clientY;
+
+    console.log('📝 Starting long press detection for text selection');
+
+    // Set up long press timer
+    const longPressTimer = setTimeout(() => {
+      console.log('📝 Long press detected - attempting to start text selection');
+
+      // Try to create a selection at the touch point
+      const elementAtPoint = document.elementFromPoint(startX, startY);
+      if (elementAtPoint && pageElementRef.current?.contains(elementAtPoint)) {
+        // Try to start text selection at this point
+        const range = document.caretRangeFromPoint?.(startX, startY);
+        if (range) {
+          const selection = window.getSelection();
+          if (selection) {
+            selection.removeAllRanges();
+            selection.addRange(range);
+            console.log('📝 Started text selection at touch point');
+          }
+        }
+      }
+    }, 500); // 500ms long press
+
+    // Clean up timer on touch move or end
+    const cleanup = () => {
+      clearTimeout(longPressTimer);
+      document.removeEventListener('touchmove', handleMove);
+      document.removeEventListener('touchend', handleEnd);
+    };
+
+    const handleMove = (moveEvent: TouchEvent) => {
+      if (moveEvent.touches.length !== 1) {
+        cleanup();
+        return;
+      }
+
+      const moveTouch = moveEvent.touches[0];
+      const deltaX = Math.abs(moveTouch.clientX - startX);
+      const deltaY = Math.abs(moveTouch.clientY - startY);
+
+      // If moved too much, cancel long press
+      if (deltaX > 10 || deltaY > 10) {
+        cleanup();
+      }
+    };
+
+    const handleEnd = () => {
+      cleanup();
+    };
+
+    document.addEventListener('touchmove', handleMove, { passive: true });
+    document.addEventListener('touchend', handleEnd, { passive: true });
+  }, []);
 
   const clearSelection = useCallback(() => {
     window.getSelection()?.removeAllRanges();
@@ -211,23 +323,32 @@ export const useTextSelection = ({
       handleSelectionChange();
     };
 
-    // Add passive listeners for better mobile performance
-    const options = { passive: true };
-    
+    // Use non-passive listeners for touch events to allow preventDefault when needed
+    const nonPassiveOptions = { passive: false };
+    const passiveOptions = { passive: true };
+
     document.addEventListener('selectionchange', handleDocumentSelectionChange);
     document.addEventListener('mousedown', handleMouseDown);
     document.addEventListener('mouseup', handleMouseUp);
-    document.addEventListener('touchstart', handleTouchStart, options);
-    document.addEventListener('touchend', handleTouchEnd, options);
+
+    // Enhanced mobile touch event handling
+    document.addEventListener('touchstart', handleTouchStart, nonPassiveOptions);
+    document.addEventListener('touchmove', handleTouchMove, passiveOptions);
+    document.addEventListener('touchend', handleTouchEnd, nonPassiveOptions);
+
+    // Additional long press handling for mobile
+    document.addEventListener('touchstart', handleTouchStartLongPress, passiveOptions);
 
     return () => {
       document.removeEventListener('selectionchange', handleDocumentSelectionChange);
       document.removeEventListener('mousedown', handleMouseDown);
       document.removeEventListener('mouseup', handleMouseUp);
       document.removeEventListener('touchstart', handleTouchStart);
+      document.removeEventListener('touchmove', handleTouchMove);
       document.removeEventListener('touchend', handleTouchEnd);
+      document.removeEventListener('touchstart', handleTouchStartLongPress);
     };
-  }, [handleSelectionChange, handleMouseDown, handleMouseUp, handleTouchStart, handleTouchEnd]);
+  }, [handleSelectionChange, handleMouseDown, handleMouseUp, handleTouchStart, handleTouchMove, handleTouchEnd, handleTouchStartLongPress]);
 
   // Expose method to set page element reference
   const setPageElement = useCallback((element: HTMLElement | null) => {
@@ -238,7 +359,6 @@ export const useTextSelection = ({
     currentSelection,
     clearSelection,
     isSelecting,
-    // Internal method for PdfDisplay to set page element reference
-    setPageElement: setPageElement as any
+    setPageElement
   };
 };

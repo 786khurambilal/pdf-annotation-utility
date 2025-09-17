@@ -10,7 +10,7 @@ import { TextSelection, Highlight, Comment, CallToAction, AreaCoordinates, Recta
 import { useTextSelection } from '../../hooks/useTextSelection';
 import { useResponsive } from '../../hooks/useResponsive';
 import { usePDFErrors } from '../../hooks/useErrorHandler';
-import { applyMobilePDFTextFixes, debugTextSelection, getMobileSelectionInfo, createMobileTouchSelection } from '../../utils/mobileTextSelection';
+import { applyMobilePDFTextFixes, debugTextSelection, getMobileSelectionInfo, createMobileTouchSelection, forceImmediateTextSelection, forceMobilePDFVisibility, enableAggressiveMobileTextSelection, testMobileTextSelection } from '../../utils/mobileTextSelection';
 import { theme } from '../../styles/theme';
 import { HighlightOverlay } from '../annotations/HighlightOverlay';
 import { HighlightCreator } from '../annotations/HighlightCreator';
@@ -89,6 +89,15 @@ const DocumentContainer = styled.div`
     -webkit-touch-callout: default;
     -webkit-user-select: text;
     user-select: text;
+    
+    /* Ensure PDF is visible on mobile */
+    min-height: 100%;
+    align-items: flex-start;
+    padding: ${theme.spacing.sm};
+  }
+
+  @media (max-width: ${theme.breakpoints.mobile}) {
+    padding: ${theme.spacing.xs};
   }
 `;
 
@@ -157,7 +166,7 @@ const PageContainer = styled.div.withConfig({
   margin: ${theme.spacing.md};
   box-shadow: ${theme.shadows.md};
   border-radius: ${theme.borderRadius.sm};
-  overflow: hidden;
+  overflow: visible;
 
   display: flex;
   justify-content: center;
@@ -186,6 +195,12 @@ const PageContainer = styled.div.withConfig({
 
   /* Mobile-specific improvements */
   @media (max-width: ${theme.breakpoints.tablet}) {
+    /* CRITICAL: Ensure PDF is visible on mobile */
+    margin: ${theme.spacing.sm};
+    width: 100%;
+    max-width: 100%;
+    overflow: visible;
+    
     /* Make text selection more prominent on mobile */
     ::selection {
       background-color: rgba(0, 123, 255, 0.7);
@@ -227,10 +242,19 @@ const PageContainer = styled.div.withConfig({
       -webkit-user-select: text !important;
       pointer-events: auto !important;
     }
-  }
-
-  @media (max-width: ${theme.breakpoints.tablet}) {
-    margin: ${theme.spacing.sm};
+    
+    /* Ensure PDF page is visible */
+    .react-pdf__Page {
+      width: 100% !important;
+      max-width: 100% !important;
+      height: auto !important;
+    }
+    
+    .react-pdf__Page__canvas {
+      width: 100% !important;
+      max-width: 100% !important;
+      height: auto !important;
+    }
   }
 
   @media (max-width: ${theme.breakpoints.mobile}) {
@@ -320,12 +344,38 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
 
     // Apply mobile text selection fixes after page loads
     if (responsive.isMobile) {
+      // Immediate fixes
+      forceMobilePDFVisibility();
+      enableAggressiveMobileTextSelection();
+      forceImmediateTextSelection();
+      
+      // Standard fixes with delays
       applyMobilePDFTextFixes();
 
-      // Additional aggressive fix - apply again after a longer delay
+      // Additional aggressive fixes with longer delays
       setTimeout(() => {
+        forceMobilePDFVisibility();
+        enableAggressiveMobileTextSelection();
+        forceImmediateTextSelection();
         applyMobilePDFTextFixes();
-      }, 2000);
+        
+        // Test text selection after applying fixes
+        setTimeout(() => {
+          const testResult = testMobileTextSelection();
+          console.log('📱 Mobile text selection test result:', testResult);
+        }, 500);
+      }, 1000);
+      
+      setTimeout(() => {
+        forceMobilePDFVisibility();
+        enableAggressiveMobileTextSelection();
+        forceImmediateTextSelection();
+      }, 2500);
+      
+      setTimeout(() => {
+        forceMobilePDFVisibility();
+        enableAggressiveMobileTextSelection();
+      }, 5000);
     }
 
     onPageLoadSuccess?.(page);
@@ -351,22 +401,27 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
       return scale;
     }
 
-    const containerPadding = 32; // Account for margins and padding
+    // Adjust padding based on device type
+    const containerPadding = responsive.isMobile ? 16 : 32; // Less padding on mobile
     const availableWidth = containerSize.width - containerPadding;
     const availableHeight = containerSize.height - containerPadding;
 
     if (zoomMode === 'fit-width') {
-      return availableWidth / pageSize.width;
+      const calculatedScale = availableWidth / pageSize.width;
+      // Ensure minimum scale for readability on mobile
+      return responsive.isMobile ? Math.max(0.5, calculatedScale) : calculatedScale;
     }
 
     if (zoomMode === 'fit-page') {
       const widthScale = availableWidth / pageSize.width;
       const heightScale = availableHeight / pageSize.height;
-      return Math.min(widthScale, heightScale);
+      const calculatedScale = Math.min(widthScale, heightScale);
+      // Ensure minimum scale for readability on mobile
+      return responsive.isMobile ? Math.max(0.5, calculatedScale) : calculatedScale;
     }
 
     return scale;
-  }, [zoomMode, scale, containerSize, pageSize]);
+  }, [zoomMode, scale, containerSize, pageSize, responsive.isMobile]);
 
   const effectiveScale = calculateScale();
 
@@ -479,12 +534,18 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
     }
   }, [setPageElement, pageRef.current, responsive.isMobile, pageNumber, effectiveScale, handleTextSelected]);
 
-  // Continuous mobile text selection monitoring
+  // Continuous mobile text selection monitoring and fixes
   useEffect(() => {
     if (!responsive.isMobile) return;
 
+    // Initial aggressive fix application
+    forceMobilePDFVisibility();
+    enableAggressiveMobileTextSelection();
+    forceImmediateTextSelection();
+    applyMobilePDFTextFixes();
+
+    // Set up continuous monitoring
     const interval = setInterval(() => {
-      // Check if text layers exist and apply fixes if needed
       const textLayers = document.querySelectorAll('.react-pdf__Page__textContent, .textLayer');
       if (textLayers.length > 0) {
         let needsFix = false;
@@ -492,7 +553,9 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
         textLayers.forEach(layer => {
           if (layer instanceof HTMLElement) {
             const computedStyle = window.getComputedStyle(layer);
-            if (computedStyle.userSelect !== 'text' || computedStyle.pointerEvents === 'none') {
+            if (computedStyle.userSelect !== 'text' || 
+                computedStyle.pointerEvents === 'none' ||
+                computedStyle.zIndex !== '20') {
               needsFix = true;
             }
           }
@@ -500,12 +563,48 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
 
         if (needsFix) {
           console.log('📱 Reapplying mobile text selection fixes');
+          forceMobilePDFVisibility();
+          enableAggressiveMobileTextSelection();
+          forceImmediateTextSelection();
           applyMobilePDFTextFixes();
         }
       }
-    }, 3000); // Check every 3 seconds
+    }, 2000); // Check every 2 seconds
 
-    return () => clearInterval(interval);
+    // Also set up a mutation observer for immediate fixes
+    const observer = new MutationObserver((mutations) => {
+      let shouldApplyFixes = false;
+      
+      mutations.forEach((mutation) => {
+        mutation.addedNodes.forEach((node) => {
+          if (node instanceof HTMLElement) {
+            if (node.classList.contains('react-pdf__Page__textContent') ||
+                node.classList.contains('textLayer') ||
+                node.querySelector('.react-pdf__Page__textContent, .textLayer')) {
+              shouldApplyFixes = true;
+            }
+          }
+        });
+      });
+      
+      if (shouldApplyFixes) {
+        console.log('📱 New text layers detected via mutation observer');
+        setTimeout(() => {
+          forceMobilePDFVisibility();
+          enableAggressiveMobileTextSelection();
+          forceImmediateTextSelection();
+          applyMobilePDFTextFixes();
+        }, 50);
+      }
+    });
+
+    // Observe the entire document for PDF changes
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      clearInterval(interval);
+      observer.disconnect();
+    };
   }, [responsive.isMobile]);
 
   // Handle highlight creation
@@ -747,19 +846,27 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
       const touch = touches[0];
       setTouchStartX(touch.clientX);
 
-      // On mobile, be much more conservative about double-tap zoom
+      // On mobile, be extremely conservative about double-tap zoom to avoid interfering with text selection
       if (responsive.isMobile) {
-        // Only handle double tap if it's very quick and there's no text selection
-        if (currentTime - lastTouchTime < 250) {
+        // Check if user is trying to select text (look for text elements under touch)
+        const elementUnderTouch = document.elementFromPoint(touch.clientX, touch.clientY);
+        const isTextElement = elementUnderTouch && (
+          elementUnderTouch.closest('.react-pdf__Page__textContent') ||
+          elementUnderTouch.closest('.textLayer') ||
+          elementUnderTouch.tagName === 'SPAN'
+        );
+
+        // Only handle double tap if it's very quick, no text selection, and not on text elements
+        if (currentTime - lastTouchTime < 200 && !isTextElement) {
           const selection = window.getSelection();
           const hasTextSelection = selection && !selection.isCollapsed && selection.toString().trim().length > 0;
 
           // Only zoom if there's definitely no text selection and user tapped same area
-          if (!hasTextSelection && Math.abs(touch.clientX - (touchStartX || 0)) < 20) {
+          if (!hasTextSelection && Math.abs(touch.clientX - (touchStartX || 0)) < 15) {
             if (scale > 1.0) {
               onScaleChange?.(1.0);
             } else {
-              onScaleChange?.(1.5); // Smaller zoom increment
+              onScaleChange?.(1.3); // Even smaller zoom increment
             }
             event.preventDefault();
           }
@@ -796,15 +903,23 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
       onScaleChange(newScale);
       event.preventDefault();
     } else if (touches.length === 1) {
-      // Single touch move - allow text selection but track movement for swipe detection
-      // Don't prevent default to allow text selection
+      // Single touch move - be very careful not to interfere with text selection
       const touch = touches[0];
       const moveDistance = touchStartX ? Math.abs(touch.clientX - touchStartX) : 0;
 
-      // Only consider it a swipe if significant horizontal movement
-      if (moveDistance > 30) {
-        // This might be a swipe, but still allow text selection
-        // The swipe will be handled in touchEnd
+      // Check if user might be selecting text
+      const selection = window.getSelection();
+      const hasActiveSelection = selection && selection.rangeCount > 0 && !selection.isCollapsed;
+      
+      // If there's an active text selection, don't interfere at all
+      if (hasActiveSelection) {
+        return;
+      }
+
+      // Only consider it a potential swipe if significant horizontal movement and no text selection
+      if (moveDistance > 50) {
+        // This might be a swipe, but we'll handle it in touchEnd
+        // Don't prevent default to preserve text selection capability
       }
     }
   }, [touchStartDistance, touchStartScale, getTouchDistance, onScaleChange, touchStartX]);
@@ -1135,6 +1250,53 @@ export const PdfDisplay: React.FC<PdfDisplayProps> = ({
               }}>
                 {responsive.isMobile ? 'MOBILE' : 'DESKTOP'} ({responsive.screenWidth}px)
               </div>
+
+              {responsive.isMobile && (
+                <>
+                  <div style={{
+                    position: 'fixed',
+                    top: '110px',
+                    right: '10px',
+                    zIndex: 9999,
+                    background: 'orange',
+                    color: 'white',
+                    padding: '5px',
+                    borderRadius: '3px',
+                    fontSize: '10px',
+                    cursor: 'pointer'
+                  }}
+                    onClick={() => {
+                      console.log('📱 Testing mobile text selection...');
+                      import('../../utils/mobileTextSelection').then(({ diagnoseMobileTextSelection }) => {
+                        diagnoseMobileTextSelection();
+                      });
+                    }}>
+                    Test Mobile Selection
+                  </div>
+
+                  <div style={{
+                    position: 'fixed',
+                    top: '150px',
+                    right: '10px',
+                    zIndex: 9999,
+                    background: 'purple',
+                    color: 'white',
+                    padding: '5px',
+                    borderRadius: '3px',
+                    fontSize: '10px',
+                    cursor: 'pointer'
+                  }}
+                    onClick={() => {
+                      console.log('📱 Reapplying mobile fixes...');
+                      forceMobilePDFVisibility();
+                      enableAggressiveMobileTextSelection();
+                      forceImmediateTextSelection();
+                      applyMobilePDFTextFixes();
+                    }}>
+                    Fix Mobile Selection
+                  </div>
+                </>
+              )}
             </>
           )}
         </Document>
