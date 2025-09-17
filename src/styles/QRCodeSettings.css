@@ -1,0 +1,338 @@
+/* QR Code Settings Component Styles */
+
+.qr-settings {
+  max-width: 600px;
+  margin: 0 auto;
+  padding: 24px;
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.qr-settings__header {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.qr-settings__header h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.qr-settings__description {
+  margin: 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+/* Error Display */
+.qr-settings__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #dc2626;
+}
+
+.qr-settings__error-text {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.qr-settings__error-dismiss {
+  background: none;
+  border: none;
+  color: #dc2626;
+  font-size: 1.25rem;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: background-color 0.2s;
+}
+
+.qr-settings__error-dismiss:hover {
+  background-color: #fee2e2;
+}
+
+/* Main Settings */
+.qr-settings__main {
+  margin-bottom: 24px;
+}
+
+.qr-settings__section {
+  margin-bottom: 20px;
+}
+
+.qr-settings__section:last-child {
+  margin-bottom: 0;
+}
+
+/* Toggle Controls */
+.qr-settings__toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.qr-settings__checkbox {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.qr-settings__checkbox:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.qr-settings__toggle-label {
+  font-weight: 500;
+  color: #1f2937;
+  line-height: 1.4;
+}
+
+.qr-settings__toggle:has(.qr-settings__checkbox:disabled) .qr-settings__toggle-label {
+  opacity: 0.5;
+}
+
+/* Form Fields */
+.qr-settings__field {
+  display: block;
+}
+
+.qr-settings__field-label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+  color: #1f2937;
+  font-size: 0.875rem;
+}
+
+.qr-settings__input {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  background-color: #ffffff;
+}
+
+.qr-settings__input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.qr-settings__input:disabled {
+  background-color: #f9fafb;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+.qr-settings__input--number {
+  max-width: 120px;
+}
+
+/* Help Text */
+.qr-settings__help-text {
+  margin: 6px 0 0 0;
+  font-size: 0.75rem;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+/* Advanced Settings */
+.qr-settings__advanced {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.qr-settings__advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #3b82f6;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.qr-settings__advanced-toggle:hover {
+  color: #2563eb;
+}
+
+.qr-settings__chevron {
+  font-size: 0.75rem;
+  transition: transform 0.2s;
+}
+
+.qr-settings__chevron.expanded {
+  transform: rotate(180deg);
+}
+
+.qr-settings__advanced-content {
+  margin-top: 16px;
+  padding-left: 16px;
+  border-left: 2px solid #e5e7eb;
+}
+
+/* Actions */
+.qr-settings__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 20px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.qr-settings__button {
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+}
+
+.qr-settings__button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.qr-settings__button--secondary {
+  background-color: #ffffff;
+  color: #6b7280;
+  border-color: #d1d5db;
+}
+
+.qr-settings__button--secondary:hover:not(:disabled) {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+/* Loading State */
+.qr-settings__loading {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  color: #6b7280;
+  border-radius: 8px;
+}
+
+/* Responsive Design */
+@media (max-width: 640px) {
+  .qr-settings {
+    padding: 16px;
+    margin: 0 16px;
+  }
+  
+  .qr-settings__header h3 {
+    font-size: 1.25rem;
+  }
+  
+  .qr-settings__actions {
+    flex-direction: column;
+  }
+  
+  .qr-settings__button {
+    width: 100%;
+  }
+}
+
+/* Dark Mode Support */
+@media (prefers-color-scheme: dark) {
+  .qr-settings {
+    background: #1f2937;
+    color: #f9fafb;
+  }
+  
+  .qr-settings__header {
+    border-bottom-color: #374151;
+  }
+  
+  .qr-settings__header h3 {
+    color: #f9fafb;
+  }
+  
+  .qr-settings__description {
+    color: #9ca3af;
+  }
+  
+  .qr-settings__toggle-label {
+    color: #f9fafb;
+  }
+  
+  .qr-settings__field-label {
+    color: #f9fafb;
+  }
+  
+  .qr-settings__input {
+    background-color: #374151;
+    border-color: #4b5563;
+    color: #f9fafb;
+  }
+  
+  .qr-settings__input:disabled {
+    background-color: #2d3748;
+    color: #9ca3af;
+  }
+  
+  .qr-settings__help-text {
+    color: #9ca3af;
+  }
+  
+  .qr-settings__advanced {
+    border-top-color: #374151;
+  }
+  
+  .qr-settings__advanced-content {
+    border-left-color: #374151;
+  }
+  
+  .qr-settings__actions {
+    border-top-color: #374151;
+  }
+  
+  .qr-settings__button--secondary {
+    background-color: #374151;
+    color: #d1d5db;
+    border-color: #4b5563;
+  }
+  
+  .qr-settings__button--secondary:hover:not(:disabled) {
+    background-color: #4b5563;
+    border-color: #6b7280;
+  }
+}
